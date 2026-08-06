@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MathSnap — Display</title>
+  <meta name="description" content="MathSnap TV display. Shows pairing code and AI-generated math solutions." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- MathJax for LaTeX rendering -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath:  [['$','$'],  ['\\(','\\)']],
+        displayMath: [['$$','$$'], ['\\[','\\]']],
+        processEscapes: true
+      },
+      options: { skipHtmlTags: ['script','noscript','style','textarea'] },
+      startup: { ready() { MathJax.startup.defaultReady(); } }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async></script>
+
+  <!-- Marked (markdown → html) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #080c18;
+      --surface:  #0f1424;
+      --card:     #131929;
+      --card2:    #161d32;
+      --border:   #1e2a45;
+      --primary:  #7c3aed;
+      --primary2: #a855f7;
+      --cyan:     #00d4ff;
+      --cyan2:    #38bdf8;
+      --green:    #10b981;
+      --amber:    #f59e0b;
+      --red:      #ef4444;
+      --text:     #f0f4ff;
+      --muted:    #7a85a0;
+      --font:     'Inter', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* Background glow */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 15% 15%, rgba(124,58,237,.12) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 40% at 85% 85%, rgba(0,212,255,.08) 0%, transparent 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ═══════════════════════════════════════════
+       PAIRING SCREEN
+    ═══════════════════════════════════════════ */
+    #pairing-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px;
+    }
+
+    .pairing-inner {
+      display: flex;
+      gap: 72px;
+      align-items: center;
+      max-width: 1100px;
+      width: 100%;
+    }
+
+    .pairing-left {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .brand-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 12px var(--cyan);
+      animation: glow-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes glow-pulse {
+      0%,100% { opacity: 1; box-shadow: 0 0 12px var(--cyan); }
+      50%      { opacity: .5; box-shadow: 0 0 4px var(--cyan); }
+    }
+
+    .pairing-title {
+      font-size: clamp(2.5rem, 4vw, 4rem);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -.03em;
+    }
+
+    .pairing-title .grad {
+      background: linear-gradient(135deg, var(--text) 30%, var(--primary2) 70%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .room-display {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 28px 32px;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .room-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .room-id {
+      font-size: clamp(3rem, 5vw, 5rem);
+      font-weight: 900;
+      letter-spacing: .18em;
+      font-variant-numeric: tabular-nums;
+      background: linear-gradient(135deg, var(--primary2), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .room-hint {
+      font-size: .85rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: .95rem;
+      color: var(--muted);
+    }
+
+    .step-n {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--primary2);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .pairing-right {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .qr-frame {
+      padding: 20px;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 20px 60px rgba(0,0,0,.5);
+    }
+
+    .qr-label {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-align: center;
+      letter-spacing: .04em;
+    }
+
+    /* ═══════════════════════════════════════════
+       MAIN LAYOUT (after connected)
+    ═══════════════════════════════════════════ */
+    #main-layout {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+    }
+
+    /* Top bar */
+    #top-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 36px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,12,24,.8);
+      backdrop-filter: blur(12px);
+      flex-shrink: 0;
+    }
+
+    .bar-brand {
+      font-size: 1.1rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--primary2), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -.02em;
+    }
+
+    .bar-sep { color: var(--border); margin: 0 4px; }
+
+    #bar-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .bar-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    .bar-dot.processing { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: blink 1s infinite; }
+
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+    #bar-room {
+      margin-left: auto;
+      font-size: .78rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+    }
+
+    /* Content area */
+    #content-area {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Left: thumbnail + meta */
+    #sidebar {
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow-y: auto;
+      padding: 28px 24px;
+      gap: 20px;
+    }
+
+    .sidebar-label {
+      font-size: .72rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    #thumb-container {
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--border);
+      font-size: .85rem;
+    }
+
+    #thumb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+
+    #thumb-placeholder { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: .85rem; }
+
+    .meta-card {
+      padding: 16px;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .meta-title { font-size: .78rem; font-weight: 700; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+    .meta-val   { font-size: .95rem; font-weight: 600; color: var(--text); }
+
+    /* Right: solution panel */
+    #solution-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Idle screen */
+    #idle-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      color: var(--muted);
+    }
+
+    .idle-icon { font-size: 5rem; opacity: .3; }
+    .idle-text { font-size: 1.2rem; font-weight: 500; }
+    .idle-sub  { font-size: .88rem; opacity: .7; }
+
+    /* Processing screen */
+    #processing-screen {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .proc-ring {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary2);
+      border-right-color: var(--cyan);
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .proc-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .proc-sub {
+      font-size: .85rem;
+      color: var(--border);
+    }
+
+    /* Solution scroll area */
+    #solution-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 40px;
+      display: none;
+    }
+
+    #solution-scroll::-webkit-scrollbar { width: 6px; }
+    #solution-scroll::-webkit-scrollbar-track { background: transparent; }
+    #solution-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Solution header */
+    .solution-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .solution-header-icon {
+      width: 42px; height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--primary2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .solution-header-text h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: -.02em;
+    }
+
+    .solution-header-text p {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* Markdown / math rendering */
+    #solution-body {
+      font-size: 1.05rem;
+      line-height: 1.8;
+      color: var(--text);
+    }
+
+    #solution-body h1,
+    #solution-body h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--primary2);
+      margin: 24px 0 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: -.02em;
+    }
+
+    #solution-body h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--cyan2);
+      margin: 20px 0 8px;
+    }
+
+    #solution-body p { margin-bottom: 14px; }
+
+    #solution-body strong { color: var(--text); font-weight: 700; }
+
+    #solution-body code {
+      font-family: 'Courier New', monospace;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-size: .92em;
+      color: var(--cyan2);
+    }
+
+    #solution-body pre {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    #solution-body pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 1rem;
+    }
+
+    #solution-body blockquote {
+      border-left: 3px solid var(--primary);
+      padding: 12px 20px;
+      background: rgba(124,58,237,.08);
+      border-radius: 0 10px 10px 0;
+      margin: 16px 0;
+      color: var(--muted);
+    }
+
+    #solution-body ol, #solution-body ul {
+      padding-left: 24px;
+      margin-bottom: 14px;
+    }
+
+    #solution-body li { margin-bottom: 8px; }
+
+    #solution-body hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 24px 0;
+    }
+
+    /* Final answer highlight */
+    .final-answer-box {
+      margin-top: 28px;
+      padding: 22px 28px;
+      background: linear-gradient(135deg, rgba(124,58,237,.12), rgba(0,212,255,.08));
+      border: 1px solid rgba(124,58,237,.35);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .fa-icon { font-size: 2rem; }
+
+    .fa-content { flex: 1; }
+
+    .fa-label {
+      font-size: .7rem;
+      font-weight: 700;
+      color: var(--primary2);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .fa-value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -.02em;
+    }
+
+    /* Error state */
+    #error-screen {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 40px;
+    }
+
+    .error-icon { font-size: 3rem; }
+    .error-title { font-size: 1.3rem; font-weight: 700; color: var(--red); }
+    .error-msg { font-size: .88rem; color: var(--muted); text-align: center; line-height: 1.6; }
+    .retry-btn {
+      margin-top: 8px;
+      padding: 10px 24px;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: .88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    .retry-btn:hover { border-color: var(--primary2); }
+
+    /* History dots */
+    #history-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 40px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .history-label { font-size: .7rem; color: var(--muted); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-right: 4px; }
+
+    .history-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: background .3s;
+    }
+
+    .history-dot.active { background: var(--primary2); }
+
+    /* Fade-in animation */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-in { animation: fadeInUp .5s ease forwards; }
+
+    /* Scrollbar for sidebar */
+    #sidebar::-webkit-scrollbar { width: 4px; }
+    #sidebar::-webkit-scrollbar-track { background: transparent; }
+    #sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- ── PAIRING SCREEN ─────────────────────────── -->
+  <div id="pairing-screen">
+    <div class="pairing-inner">
+      <!-- Left column -->
+      <div class="pairing-left">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          MathSnap AI
+        </div>
+
+        <div class="pairing-title">
+          <span class="grad">Ready to</span><br/>
+          <span class="grad">Solve Math.</span>
+        </div>
+
+        <div class="room-display">
+          <div class="room-label">Room ID — Enter on iPhone</div>
+          <div class="room-id" id="room-id-display">……</div>
+          <div class="room-hint">Or scan the QR code →</div>
+        </div>
+
+        <div class="step-list">
+          <div class="step-item">
+            <span class="step-n">1</span>
+            Scan the QR code with your iPhone
+          </div>
+          <div class="step-item">
+            <span class="step-n">2</span>
+            Tap <strong>Connect to TV</strong> in camera mode
+          </div>
+          <div class="step-item">
+            <span class="step-n">3</span>
+            Point at math &amp; press A/B/X/Y or tap 📸
+          </div>
+        </div>
+
+        <div id="peer-status" style="font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:8px;">
+          <div class="bar-dot processing"></div>
+          <span>Starting peer server…</span>
+        </div>
+      </div>
+
+      <!-- Right column: QR code -->
+      <div class="pairing-right">
+        <div class="qr-frame">
+          <div id="qr-canvas"></div>
+        </div>
+        <div class="qr-label">Scan to open Camera Mode</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MAIN LAYOUT (after connection) ─────────── -->
+  <div id="main-layout">
+
+    <!-- Top bar -->
+    <div id="top-bar">
+      <span class="bar-brand">✦ MathSnap</span>
+      <span class="bar-sep">·</span>
+      <div id="bar-status">
+        <div class="bar-dot" id="bar-dot"></div>
+        <span id="bar-status-text">Connected</span>
+      </div>
+      <div id="bar-room">Room: <strong id="bar-room-id"></strong></div>
+    </div>
+
+    <!-- Content -->
+    <div id="content-area">
+
+      <!-- Sidebar -->
+      <div id="sidebar">
+        <div class="sidebar-label">Captured Image</div>
+
+        <div id="thumb-container">
+          <img id="thumb-img" alt="Captured math" />
+          <div id="thumb-placeholder">📷 Waiting…</div>
+        </div>
+
+        <div class="meta-card">
+          <div class="meta-title">Captures</div>
+          <div class="meta-val" id="capture-count">0</div>
+        </div>
+
+        <div class="meta-card">
+          <div class="meta-title">Last Capture</div>
+          <div class="meta-val" id="last-capture-time">—</div>
+        </div>
+
+        <div class="meta-card" id="model-card">
+          <div class="meta-title">AI Model</div>
+          <div class="meta-val">Gemini 1.5 Flash</div>
+        </div>
+      </div>
+
+      <!-- Solution panel -->
+      <div id="solution-panel">
+
+        <!-- Idle -->
+        <div id="idle-screen">
+          <div class="idle-icon">🎯</div>
+          <div class="idle-text">Waiting for a photo…</div>
+          <div class="idle-sub">Press A/B/X/Y on your controller to capture</div>
+        </div>
+
+        <!-- Processing -->
+        <div id="processing-screen">
+          <div class="proc-ring"></div>
+          <div class="proc-text">Solving with Gemini AI…</div>
+          <div class="proc-sub">Analyzing the math problem</div>
+        </div>
+
+        <!-- Solution -->
+        <div id="solution-scroll">
+          <div class="solution-header">
+            <div class="solution-header-icon">🧮</div>
+            <div class="solution-header-text">
+              <h2>Solution</h2>
+              <p id="solution-timestamp"></p>
+            </div>
+          </div>
+          <div id="solution-body"></div>
+        </div>
+
+        <!-- Error -->
+        <div id="error-screen">
+          <div class="error-icon">⚠️</div>
+          <div class="error-title">Couldn't solve that</div>
+          <div class="error-msg" id="error-msg">An error occurred while contacting Gemini.</div>
+          <button class="retry-btn" onclick="showIdle()">← Go back</button>
+        </div>
+
+        <!-- History dots -->
+        <div id="history-bar">
+          <span class="history-label">History</span>
+          <div id="history-dots"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- QRCode.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- PeerJS -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <script>
+  // ─────────────────────────────────────────────
+  //  CONFIG
+  // ─────────────────────────────────────────────
+  const GEMINI_API_KEY = 'AQ.Ab8RN6J8ffUK7l-5BAxjEr7Ym0hv5nzzjEuAJBXxDZ87GiR1Jg';
+  const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+  const GEMINI_PROMPT = `You are an expert math tutor. The image shows a math problem or expression.
+
+Please:
+1. Identify the problem clearly.
+2. Solve it step by step, showing all work.
+3. Provide the final answer.
+
+**Formatting rules:**
+- Use **$$...$$** on its own line for displayed equations.
+- Use **$...$** for inline math.
+- Use **bold** for key terms.
+- Use numbered lists for steps.
+- End with a clear **Final Answer** section.
+
+Be thorough, clear, and educational.`;
+
+  // ─────────────────────────────────────────────
+  //  State
+  // ─────────────────────────────────────────────
+  let peer = null;
+  let conn = null;
+  let captureCount = 0;
+  let history = [];
+  const MAX_HISTORY = 8;
+
+  // ─────────────────────────────────────────────
+  //  Generate room ID
+  // ─────────────────────────────────────────────
+  function generateRoomId() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+    let id = '';
+    for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
+    return id;
+  }
+
+  // ─────────────────────────────────────────────
+  //  Init
+  // ─────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    const roomId = generateRoomId();
+    document.getElementById('room-id-display').textContent = roomId;
+    document.getElementById('bar-room-id').textContent = roomId;
+
+    // Build camera URL dynamically
+    const base = window.location.href.replace(/display\.html.*$/, '');
+    const cameraUrl = `${base}camera.html?room=${roomId}`;
+
+    // QR code (white background version)
+    new QRCode(document.getElementById('qr-canvas'), {
+      text: cameraUrl,
+      width: 220,
+      height: 220,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+
+    // Start PeerJS with the room ID as our peer ID
+    initPeer(roomId);
+  });
+
+  // ─────────────────────────────────────────────
+  //  PeerJS
+  // ─────────────────────────────────────────────
+  function initPeer(roomId) {
+    peer = new Peer(roomId);
+
+    peer.on('open', (id) => {
+      updatePeerStatus('ready', `Listening for connections… (${id})`);
+    });
+
+    peer.on('connection', (c) => {
+      conn = c;
+      updatePeerStatus('connected', 'iPhone connected! 🎉');
+
+      c.on('data', (data) => {
+        handleIncomingImage(data);
+      });
+
+      c.on('close', () => {
+        setBarStatus('processing', 'iPhone disconnected');
+        conn = null;
+      });
+
+      c.on('error', (e) => {
+        setBarStatus('error', 'Connection error');
+      });
+
+      // Switch to main layout
+      setTimeout(() => showMainLayout(), 600);
+    });
+
+    peer.on('error', (err) => {
+      // If ID is taken, try a new one
+      if (err.type === 'unavailable-id') {
+        const newId = generateRoomId();
+        document.getElementById('room-id-display').textContent = newId;
+        document.getElementById('bar-room-id').textContent = newId;
+        peer.destroy();
+        initPeer(newId);
+      } else {
+        updatePeerStatus('error', 'Peer error: ' + err.message);
+      }
+    });
+  }
+
+  function updatePeerStatus(state, text) {
+    const el = document.getElementById('peer-status');
+    const colors = { ready: 'var(--green)', processing: 'var(--amber)', connected: 'var(--cyan)', error: 'var(--red)' };
+    el.innerHTML = `<div style="width:8px;height:8px;border-radius:50%;background:${colors[state] || 'var(--muted)'};flex-shrink:0"></div><span>${text}</span>`;
+  }
+
+  // ─────────────────────────────────────────────
+  //  Handle incoming image
+  // ─────────────────────────────────────────────
+  async function handleIncomingImage(dataUrl) {
+    captureCount++;
+    document.getElementById('capture-count').textContent = captureCount;
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    document.getElementById('last-capture-time').textContent = timeStr;
+
+    // Update thumbnail
+    const thumbImg = document.getElementById('thumb-img');
+    thumbImg.src = dataUrl;
+    thumbImg.style.display = 'block';
+    document.getElementById('thumb-placeholder').style.display = 'none';
+
+    // Add to history
+    history.push({ dataUrl, time: timeStr });
+    if (history.length > MAX_HISTORY) history.shift();
+    updateHistoryDots(history.length - 1);
+
+    // Show processing
+    showProcessing();
+    setBarStatus('processing', 'Solving…');
+
+    try {
+      const solution = await callGemini(dataUrl);
+      showSolution(solution, timeStr);
+      setBarStatus('connected', 'Solution ready ✓');
+    } catch (err) {
+      showError(err.message);
+      setBarStatus('connected', 'Error — try again');
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  //  Gemini API
+  // ─────────────────────────────────────────────
+  async function callGemini(dataUrl) {
+    // Strip the data URL prefix to get raw base64
+    const base64 = dataUrl.split(',')[1];
+    if (!base64) throw new Error('Invalid image data');
+
+    const body = {
+      contents: [{
+        parts: [
+          { text: GEMINI_PROMPT },
+          { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 2048
+      }
+    };
+
+    const resp = await fetch(GEMINI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      let errObj;
+      try { errObj = JSON.parse(errText); } catch(_) {}
+      const msg = errObj?.error?.message || `HTTP ${resp.status}: ${resp.statusText}`;
+      throw new Error(msg);
+    }
+
+    const data = await resp.json();
+
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      return data.candidates[0].content.parts[0].text;
+    }
+
+    if (data.promptFeedback?.blockReason) {
+      throw new Error('Image blocked by safety filters: ' + data.promptFeedback.blockReason);
+    }
+
+    throw new Error('Unexpected response from Gemini API');
+  }
+
+  // ─────────────────────────────────────────────
+  //  Render solution
+  // ─────────────────────────────────────────────
+  function renderMarkdown(md) {
+    // Use marked to convert markdown → HTML
+    if (typeof marked !== 'undefined') {
+      marked.setOptions({ breaks: true, gfm: true });
+      return marked.parse(md);
+    }
+    // Fallback: basic formatting
+    return md
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>');
+  }
+
+  async function showSolution(text, timeStr) {
+    const scroll = document.getElementById('solution-scroll');
+    const body   = document.getElementById('solution-body');
+    const ts     = document.getElementById('solution-timestamp');
+
+    ts.textContent = 'Solved at ' + timeStr;
+    body.innerHTML = renderMarkdown(text);
+    body.classList.add('fade-in');
+
+    // Re-typeset MathJax
+    if (window.MathJax && MathJax.typesetPromise) {
+      await MathJax.typesetPromise([body]);
+    }
+
+    hideAll();
+    scroll.style.display = 'flex';
+    scroll.style.flexDirection = 'column';
+    scroll.scrollTop = 0;
+  }
+
+  // ─────────────────────────────────────────────
+  //  UI State helpers
+  // ─────────────────────────────────────────────
+  function showMainLayout() {
+    document.getElementById('pairing-screen').style.display = 'none';
+    document.getElementById('main-layout').style.display = 'grid';
+    setBarStatus('connected', 'iPhone connected');
+    showIdle();
+  }
+
+  function hideAll() {
+    document.getElementById('idle-screen').style.display = 'none';
+    document.getElementById('processing-screen').style.display = 'none';
+    document.getElementById('solution-scroll').style.display = 'none';
+    document.getElementById('error-screen').style.display = 'none';
+  }
+
+  function showIdle() {
+    hideAll();
+    document.getElementById('idle-screen').style.display = 'flex';
+  }
+
+  function showProcessing() {
+    hideAll();
+    document.getElementById('processing-screen').style.display = 'flex';
+  }
+
+  function showError(msg) {
+    hideAll();
+    document.getElementById('error-msg').textContent = msg;
+    document.getElementById('error-screen').style.display = 'flex';
+  }
+
+  function setBarStatus(state, text) {
+    const dot = document.getElementById('bar-dot');
+    dot.className = 'bar-dot';
+    if (state === 'processing') dot.classList.add('processing');
+    document.getElementById('bar-status-text').textContent = text;
+  }
+
+  function updateHistoryDots(activeIdx) {
+    const container = document.getElementById('history-dots');
+    container.innerHTML = '';
+    for (let i = 0; i < history.length; i++) {
+      const d = document.createElement('div');
+      d.className = 'history-dot' + (i === activeIdx ? ' active' : '');
+      d.style.cursor = 'pointer';
+      d.title = 'Capture ' + (i + 1);
+      const idx = i;
+      d.onclick = () => loadHistoryItem(idx);
+      container.appendChild(d);
+    }
+  }
+
+  async function loadHistoryItem(idx) {
+    if (!history[idx]) return;
+    const item = history[idx];
+
+    // Update thumbnail
+    const thumbImg = document.getElementById('thumb-img');
+    thumbImg.src = item.dataUrl;
+    thumbImg.style.display = 'block';
+
+    // Re-solve
+    showProcessing();
+    try {
+      const sol = await callGemini(item.dataUrl);
+      await showSolution(sol, item.time);
+    } catch (e) {
+      showError(e.message);
+    }
+
+    updateHistoryDots(idx);
+  }
+  </script>
+</body>
+</html>
